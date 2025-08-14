@@ -14,13 +14,14 @@ class AtomTyper:
     def type_everything(
         cls,
         molsetup,
+        resname,
         atom_params,
         charge_model,
         offatom_params=None,
         dihedral_params=None,
     ):
 
-        cls._type_atoms(molsetup, atom_params)
+        cls._type_atoms(molsetup, atom_params, resname=None)
 
         # offatoms must be typed after charges, because offsites pull charge
         if offatom_params is not None:
@@ -34,55 +35,64 @@ class AtomTyper:
         return
 
     @staticmethod
-    def _type_atoms(molsetup, atom_params):
-        # ensure every "atompar" is defined in a single "smartsgroup"
-        ensure = {}
-        # go over all "smartsgroup"s
-        for smartsgroup in atom_params:
-            if smartsgroup == "comment":
-                continue
-            for line in atom_params[
-                smartsgroup
-            ]:  # line is a dict, e.g. {"smarts": "[#1][#7,#8,#9,#15,#16]","atype": "HD"}
-                smarts = str(line["smarts"])
-                # get indices of the atoms in the smarts to which the parameters will be assigned
-                idxs = [
-                    0
-                ]  # by default, the first atom in the smarts gets parameterized
-                if "IDX" in line:
-                    idxs = [i for i in line["IDX"]]
-                # match SMARTS
-                hits = molsetup.find_pattern(smarts)
-                for atompar in line:
-                    if atompar in ["smarts", "comment", "IDX"]:
-                        continue
-                    if atompar not in molsetup.atom_params:
-                        molsetup.atom_params[atompar] = [None] * len(molsetup.atoms)
-                    value = line[atompar]
-                    # keep track of every "smartsgroup" that modified "atompar"
-                    ensure.setdefault(atompar, [])
-                    ensure[atompar].append(smartsgroup)
-                    # Each "hit" is a tuple of atom indices that matched the smarts
-                    # The length of each "hit" is the number of atoms in the smarts
-                    for hit in hits:
-                        # Multiple atoms may be targeted by a single smarts:
-                        # For example: both oxygens in NO2 are parameterized by a single smarts pattern.
-                        # "idxs" are 1-indices of atoms in the smarts to which parameters are to be assigned.
-                        for idx in idxs:
-                            if atompar == "atype":
-                                molsetup.set_atom_type(
-                                    hit[idx], value
-                                )  # overrides previous calls
-                            molsetup.atom_params[atompar][hit[idx]] = value
+    def _type_atoms(molsetup, atom_params, resname=None):
+        # Amber parameterization -> atom type matching, not smarts
+        if resname is not None:
+            for idx, atom in molsetup.atoms:
+                if atom.pdbinfo.resName != "UNL":
+                    atom_name = atom.pdbinfo.name
+                    atom_idx_in_atom_params = [x for x in range(len(atom_params[resname]["atom_name"])) if atom_params[resname]["atom_name"][x] == atom_name][0] 
+                    ff_params = atom_params[resname]["amber_params"][atom_idx_in_atom_params]
+                    print(ff_params)
+        else:    
+            # ensure every "atompar" is defined in a single "smartsgroup"
+            ensure = {}
+            # go over all "smartsgroup"s
+            for smartsgroup in atom_params:
+                if smartsgroup == "comment":
+                    continue
+                for line in atom_params[
+                    smartsgroup
+                ]:  # line is a dict, e.g. {"smarts": "[#1][#7,#8,#9,#15,#16]","atype": "HD"}
+                    smarts = str(line["smarts"])
+                    # get indices of the atoms in the smarts to which the parameters will be assigned
+                    idxs = [
+                        0
+                    ]  # by default, the first atom in the smarts gets parameterized
+                    if "IDX" in line:
+                        idxs = [i for i in line["IDX"]]
+                    # match SMARTS
+                    hits = molsetup.find_pattern(smarts)
+                    for atompar in line:
+                        if atompar in ["smarts", "comment", "IDX"]:
+                            continue
+                        if atompar not in molsetup.atom_params:
+                            molsetup.atom_params[atompar] = [None] * len(molsetup.atoms)
+                        value = line[atompar]
+                        # keep track of every "smartsgroup" that modified "atompar"
+                        ensure.setdefault(atompar, [])
+                        ensure[atompar].append(smartsgroup)
+                        # Each "hit" is a tuple of atom indices that matched the smarts
+                        # The length of each "hit" is the number of atoms in the smarts
+                        for hit in hits:
+                            # Multiple atoms may be targeted by a single smarts:
+                            # For example: both oxygens in NO2 are parameterized by a single smarts pattern.
+                            # "idxs" are 1-indices of atoms in the smarts to which parameters are to be assigned.
+                            for idx in idxs:
+                                if atompar == "atype":
+                                    molsetup.set_atom_type(
+                                        hit[idx], value
+                                    )  # overrides previous calls
+                                molsetup.atom_params[atompar][hit[idx]] = value
 
-        # guarantee that each atompar is exclusive of a single group
-        for atompar in ensure:
-            if len(set(ensure[atompar])) > 1:
-                msg = "%s is modified in multiple smartsgroups: %s" % (
-                    atompar,
-                    set(ensure[atompar]),
-                )
-                warnings.warn(msg)
+            # guarantee that each atompar is exclusive of a single group
+            for atompar in ensure:
+                if len(set(ensure[atompar])) > 1:
+                    msg = "%s is modified in multiple smartsgroups: %s" % (
+                        atompar,
+                        set(ensure[atompar]),
+                    )
+                    warnings.warn(msg)
         return
 
     @staticmethod

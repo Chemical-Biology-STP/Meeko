@@ -1351,9 +1351,14 @@ class Polymer(BaseJSONParsable):
         -------
 
         """
-
+        use_resname = False
+        if "amber" in  mk_prep.load_atom_params:
+            use_resname = True
+        resname = None
         for residue_id in self.get_valid_monomers():
-            self.monomers[residue_id].parameterize(mk_prep, residue_id, get_atomprop_from_raw = get_atomprop_from_raw)
+            if use_resname:
+                resname = self.monomers[residue_id].residue_template_key
+            self.monomers[residue_id].parameterize(mk_prep, residue_id, resname, get_atomprop_from_raw=get_atomprop_from_raw)
 
     @staticmethod
     def _build_rdkit_mol(raw_mol, template, mapping, nr_missing_H):
@@ -2540,8 +2545,7 @@ class Monomer(BaseJSONParsable):
         self.atom_names = atom_names_list
         return
 
-    def parameterize(self, mk_prep, residue_id, get_atomprop_from_raw: dict = None):
-
+    def parameterize(self, mk_prep, residue_id, resname, get_atomprop_from_raw: dict = None):
         if get_atomprop_from_raw: 
             if any(not isinstance(prop_name, str) for prop_name in get_atomprop_from_raw.keys()): 
                 raise ValueError(f"Atom property name must be str. Got {prop_name} ({type(prop_name)}) instead! ")
@@ -2557,8 +2561,7 @@ class Monomer(BaseJSONParsable):
                     else:
                         prop_value = str(default_value)
                     atom.SetProp(prop_name, prop_value)
-
-        molsetups = mk_prep(self.padded_mol)
+        molsetups = mk_prep(self.padded_mol, resname)
         if len(molsetups) != 1:
             raise NotImplementedError(f"need 1 molsetup but got {len(molsetups)}")
         molsetup = molsetups[0]

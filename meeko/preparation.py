@@ -6,6 +6,8 @@
 
 from inspect import signature
 import json
+
+from meeko.amber_parser import load_amber_params
 eol="\n"
 import pathlib
 import warnings
@@ -369,6 +371,9 @@ class MoleculePreparation:
             ):  # TODO allow multiple versions
                 vdw_list, _, _ = load_openff()
                 d = {"openff-2.0.0": vdw_list}
+            elif name == "amber":
+                vdw_list = load_amber_params()
+                d = {"amber": vdw_list}
             elif name in packaged_params:
                 filename = packaged_params[name]
             elif name.endswith(".json"):
@@ -433,7 +438,6 @@ class MoleculePreparation:
                 raise RuntimeError(msg)
             key = group_keys[0]
             atom_params[key].extend(add_atom_types)
-
         return atom_params
 
     @property
@@ -476,6 +480,7 @@ class MoleculePreparation:
     def prepare(
         self,
         mol,
+        resname,
         root_atom_index=None,
         not_terminal_atoms=None,
         delete_ring_bonds=None,
@@ -532,6 +537,7 @@ class MoleculePreparation:
         # 1.  assign atom params
         AtomTyper.type_everything(
             setup,
+            resname,
             self.atom_params,
             self.charge_model, # charge_model is not accessed in type_everything
             self.offatom_params,
